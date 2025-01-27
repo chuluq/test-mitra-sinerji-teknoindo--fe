@@ -30,6 +30,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { DataTable } from "./ui/data-table";
+import { columns } from "./column-transaction";
 
 const salesSchema = z.object({
   barangId: z.string().min(1),
@@ -166,6 +168,9 @@ export const FormTransaction = () => {
               </FormControl>
             </FormItem>
           </div>
+        </div>
+        <div>
+          <DataTable columns={columns} data={[]} />
         </div>
         <div className="flex flex-col items-end space-y-2">
           <FormItem>
