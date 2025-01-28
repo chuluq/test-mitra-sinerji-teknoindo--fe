@@ -12,3 +12,7 @@ export function formatPrice(price: number) {
     trailingZeroDisplay: "stripIfInteger",
   }).format(price);
 }
+
+export function calculateDiscountAmount(price: number, percent: number) {
+  return price * (percent / 100);
+}

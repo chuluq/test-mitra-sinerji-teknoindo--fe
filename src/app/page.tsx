@@ -1,9 +1,10 @@
 import { DataTableSales } from "@/components/data-table-sales";
 import { Button } from "@/components/ui/button";
+import { API_URL } from "@/lib/config";
 import Link from "next/link";
 
 export default async function Home() {
-  const data = await fetch(`${process.env.NEXT_PUBLIC_API}/sales`);
+  const data = await fetch(`${API_URL}/sales`);
   const sales = await data.json();
 
   return (
