@@ -49,6 +49,7 @@ export const columns: ColumnDef<Sales>[] = [
       const ongkir = getValue() as string;
       return <span>{formatPrice(Number(ongkir))}</span>;
     },
+    footer: "Grand Total",
   },
   {
     accessorKey: "total_bayar",
@@ -56,6 +57,13 @@ export const columns: ColumnDef<Sales>[] = [
     cell: ({ getValue }) => {
       const total = getValue() as string;
       return <span>{formatPrice(Number(total))}</span>;
+    },
+    footer: ({ table }) => {
+      const grandTotal = table
+        .getFilteredRowModel()
+        .rows?.filter((row) => row.getValue("total_bayar") !== null)
+        .reduce((total, row) => total + Number(row.getValue("total_bayar")), 0);
+      return formatPrice(grandTotal);
     },
   },
 ];
