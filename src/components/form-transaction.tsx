@@ -1,15 +1,18 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { format } from "date-fns";
-import { CalendarIcon, Trash2Icon, EditIcon, PlusIcon } from "lucide-react";
+import { ColumnDef, createColumnHelper } from "@tanstack/react-table";
+import { format, formatISO } from "date-fns";
+import { CalendarIcon, EditIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { ColumnDef, createColumnHelper } from "@tanstack/react-table";
 
-import { calculateDiscountAmount, cn, formatPrice } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { DataTable } from "@/components/ui/data-table";
 import {
   Dialog,
   DialogContent,
@@ -27,7 +30,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Calendar } from "@/components/ui/calendar";
+import { Label } from "@/components/ui/label";
 import {
   Popover,
   PopoverContent,
@@ -40,12 +43,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { DataTable } from "@/components/ui/data-table";
-import { Label } from "@/components/ui/label";
-import { formSchema, salesSchema } from "@/lib/validations";
-import { useCustomers } from "@/hooks/use-customers";
-import { SalesDetails } from "@/types";
 import { useBarang } from "@/hooks/use-barang";
+import { useCustomers } from "@/hooks/use-customers";
+import { useToast } from "@/hooks/use-toast";
+import { calculateDiscountAmount, cn, formatPrice } from "@/lib/utils";
+import { formSchema, salesSchema } from "@/lib/validations";
+import { PayloadTransaction, SalesDetails } from "@/types";
+import { API_URL } from "@/lib/config";
 
 type FormValues = z.infer<typeof formSchema>;
 type FormSalesDetails = z.infer<typeof salesSchema>;
@@ -53,6 +57,8 @@ type FormSalesDetails = z.infer<typeof salesSchema>;
 const columnHelper = createColumnHelper<SalesDetails>();
 
 export const FormTransaction = () => {
+  const router = useRouter();
+  const { toast } = useToast();
   const {
     customers,
     error: errorCustomers,
@@ -65,17 +71,17 @@ export const FormTransaction = () => {
   } = useBarang();
 
   const [openDialog, setOpenDialog] = useState(false);
+  const [isEditSale, setIsEditSale] = useState(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       tgl: new Date(),
       cust_id: "",
-      cust_kode: "",
+      kode: "",
       cust_nama: "",
       cust_telp: "",
       diskon: "",
-      kode: "",
       ongkir: "",
       subtotal: "",
       total_bayar: "",
@@ -84,11 +90,12 @@ export const FormTransaction = () => {
   });
 
   const {
-    // formState: { errors },
+    formState: { errors },
     register,
     setValue,
     handleSubmit,
     getValues,
+    watch,
     reset,
   } = useForm<FormSalesDetails>({
     resolver: zodResolver(salesSchema),
@@ -105,8 +112,54 @@ export const FormTransaction = () => {
     },
   });
 
-  function onSubmit(values: FormValues) {
-    console.log(values);
+  async function onSubmit(values: FormValues) {
+    try {
+      const sales_details = values.sales_details.map((item) => {
+        return {
+          barang_id: Number(item.barang_id),
+          harga_bandrol: Number(item.harga_bandrol),
+          qty: Number(item.qty),
+          diskon_pct: Number(item.diskon_pct),
+          diskon_nilai: Number(item.diskon_nilai),
+          harga_diskon: Number(item.harga_diskon),
+          total: Number(item.total),
+        };
+      });
+      const payload: PayloadTransaction = {
+        cust_id: Number(values.cust_id),
+        kode: values.kode,
+        tgl: formatISO(values.tgl),
+        subtotal: Number(values.subtotal),
+        diskon: Number(values.diskon),
+        ongkir: Number(values.ongkir),
+        total_bayar: Number(values.total_bayar),
+        sales_details,
+      };
+
+      const result = await fetch(`${API_URL}/sales`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!result.ok) {
+        toast({
+          title: "Something went wrong",
+          variant: "destructive",
+        });
+      }
+
+      form.reset();
+      router.push("/");
+    } catch (error) {
+      toast({
+        title: "Something went wrong",
+        description: JSON.stringify(error),
+        variant: "destructive",
+      });
+    }
   }
 
   function updateCustomerField(kode: string) {
@@ -155,6 +208,14 @@ export const FormTransaction = () => {
     form.setValue("total_bayar", total.toString());
   }
 
+  function modifySalesDetails(values: FormSalesDetails) {
+    if (isEditSale) {
+      editSalesDetails(values);
+    } else {
+      addSalesDetails(values);
+    }
+  }
+
   function addSalesDetails(values: FormSalesDetails) {
     const currentSales = form.getValues("sales_details");
     const newSales = [...currentSales, values];
@@ -166,6 +227,22 @@ export const FormTransaction = () => {
     form.setValue("subtotal", subtotal.toString());
     updateTotalBayar();
     setOpenDialog(false);
+    reset();
+  }
+
+  function editSalesDetails(values: FormSalesDetails) {
+    const sales = Array.from(form.getValues("sales_details"));
+    const index = sales.findIndex(
+      (sale) => sale.barang_id === values.barang_id
+    );
+    if (index !== -1) {
+      sales[index] = values;
+    }
+    form.setValue("sales_details", sales);
+    updateTotalBayar();
+    setIsEditSale(false);
+    setOpenDialog(false);
+    reset();
   }
 
   const columns: ColumnDef<SalesDetails>[] = [
@@ -178,13 +255,44 @@ export const FormTransaction = () => {
           </Button>
         </DialogTrigger>
       ),
-      cell: () => {
+      cell: ({ row }) => {
+        const rowSale = form.getValues("sales_details");
+        const deleteRowSale = () => {
+          const updatedSale = rowSale.filter(
+            (sale) => sale.barang_id !== row.original.barang_id
+          );
+          const subtotal = updatedSale.reduce(
+            (accumulator, currentValue) =>
+              accumulator + Number(currentValue.total),
+            0
+          );
+          form.setValue("sales_details", updatedSale);
+          form.setValue("subtotal", subtotal.toString());
+          updateTotalBayar();
+        };
+        const editRowSale = () => {
+          setIsEditSale(true);
+          const selectedRowSale = rowSale.find(
+            (sale) => sale.barang_id === row.original.barang_id
+          );
+          setValue("barang_id", selectedRowSale?.barang_id ?? "");
+          setValue("barang_kode", selectedRowSale?.barang_kode ?? "");
+          setValue("barang_nama", selectedRowSale?.barang_nama ?? "");
+          setValue("diskon_nilai", selectedRowSale?.diskon_nilai ?? "");
+          setValue("diskon_pct", selectedRowSale?.diskon_pct ?? "");
+          setValue("harga_bandrol", selectedRowSale?.harga_bandrol ?? "");
+          setValue("harga_diskon", selectedRowSale?.harga_diskon ?? "");
+          setValue("qty", selectedRowSale?.qty ?? "");
+          setValue("total", selectedRowSale?.total ?? "");
+          setOpenDialog(true);
+        };
+
         return (
           <div className="flex space-x-2">
-            <Button type="button" variant="secondary">
+            <Button variant="secondary" onClick={editRowSale}>
               <EditIcon />
             </Button>
-            <Button type="button" variant="destructive">
+            <Button variant="destructive" onClick={deleteRowSale}>
               <Trash2Icon />
             </Button>
           </div>
@@ -261,7 +369,7 @@ export const FormTransaction = () => {
               <FormItem>
                 <FormLabel>No</FormLabel>
                 <FormControl>
-                  <Input disabled />
+                  <Input placeholder="auto generated" disabled />
                 </FormControl>
               </FormItem>
               <FormField
@@ -310,7 +418,7 @@ export const FormTransaction = () => {
               <h4 className="font-medium bg-blue-100 p-2">Customer</h4>
               <FormField
                 control={form.control}
-                name="cust_kode"
+                name="kode"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Kode</FormLabel>
@@ -371,6 +479,11 @@ export const FormTransaction = () => {
               columns={columns}
               data={form.getValues("sales_details") ?? []}
             />
+            {form.formState.errors?.sales_details && (
+              <p className="text-xs text-red-600 mt-2">
+                {form.formState.errors?.sales_details.message}
+              </p>
+            )}
           </div>
           <div className="flex flex-col items-end space-y-2">
             <FormItem>
@@ -378,7 +491,7 @@ export const FormTransaction = () => {
                 <FormLabel>Sub Total</FormLabel>
                 <FormControl>
                   <Input
-                    value={formatPrice(Number(form.getValues("subtotal")))}
+                    value={formatPrice(Number(form.watch("subtotal")))}
                     disabled
                   />
                 </FormControl>
@@ -430,8 +543,8 @@ export const FormTransaction = () => {
           </div>
           <div className="flex items-center justify-center space-x-4">
             <Button type="submit">Submit</Button>
-            <Button type="button" variant="secondary">
-              Cancel
+            <Button variant="secondary" asChild>
+              <Link href="/">Cancel</Link>
             </Button>
           </div>
         </form>
@@ -450,6 +563,7 @@ export const FormTransaction = () => {
                 setValue("barang_kode", kode);
                 updateBarangField(kode);
               }}
+              value={watch("barang_kode")}
             >
               <SelectTrigger className="col-span-3">
                 <SelectValue placeholder="Select barang" />
@@ -464,6 +578,11 @@ export const FormTransaction = () => {
                   : null}
               </SelectContent>
             </Select>
+            {errors?.barang_id && (
+              <p className="ml-auto text-xs text-red-600 col-span-4">
+                {errors?.barang_id.message}
+              </p>
+            )}
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="harga_bandrol" className="text-right">
@@ -486,6 +605,7 @@ export const FormTransaction = () => {
               id="qty"
               min="1"
               className="col-span-3"
+              value={watch("qty")}
               onChange={(e) => {
                 setValue("qty", e.target.value);
                 updateTotalPrice(
@@ -509,6 +629,7 @@ export const FormTransaction = () => {
               id="diskon_pct"
               min="0"
               className="col-span-3"
+              value={watch("diskon_pct")}
               onChange={(e) => {
                 setValue("diskon_pct", e.target.value);
                 updatePriceAfterDiscount(
@@ -557,8 +678,8 @@ export const FormTransaction = () => {
           </div>
         </div>
         <DialogFooter>
-          <Button type="button" onClick={handleSubmit(addSalesDetails)}>
-            Add Barang
+          <Button onClick={handleSubmit(modifySalesDetails)}>
+            {isEditSale ? "Edit" : "Add"} Barang
           </Button>
         </DialogFooter>
       </DialogContent>
