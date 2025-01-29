@@ -81,10 +81,10 @@ export const FormTransaction = () => {
       kode: "",
       cust_nama: "",
       cust_telp: "",
-      diskon: "",
-      ongkir: "",
-      subtotal: "",
-      total_bayar: "",
+      diskon: "0",
+      ongkir: "0",
+      subtotal: "0",
+      total_bayar: "0",
       sales_details: [],
     },
   });
@@ -504,6 +504,7 @@ export const FormTransaction = () => {
                   <Input
                     type="number"
                     min={0}
+                    value={form.watch("diskon")}
                     onChange={(e) => {
                       form.setValue("diskon", e.target.value);
                       updateTotalBayar();
@@ -520,6 +521,7 @@ export const FormTransaction = () => {
                   <Input
                     type="number"
                     min={0}
+                    value={form.watch("ongkir")}
                     onChange={(e) => {
                       form.setValue("ongkir", e.target.value);
                       updateTotalBayar();
