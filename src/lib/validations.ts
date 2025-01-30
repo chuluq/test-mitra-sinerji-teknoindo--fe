@@ -1,9 +1,10 @@
 import { z } from "zod";
 
 export const salesSchema = z.object({
+  sales_id: z.string().optional(),
   barang_id: z.string().min(1, { message: "Barang is required" }),
-  barang_kode: z.string(),
-  barang_nama: z.string(),
+  kode: z.string(),
+  nama: z.string(),
   qty: z.string().min(1, { message: "Quantity is required" }),
   harga_bandrol: z.string().min(1, { message: "Harga bandrol is required" }),
   diskon_pct: z.string(),
@@ -17,7 +18,7 @@ export const formSchema = z.object({
   cust_id: z.string().min(1, { message: "Customer is required" }),
   kode: z.string().min(1, { message: "Customer is required" }),
   cust_nama: z.string(),
-  cust_telp: z.string(),
+  cust_telp: z.string().optional(),
   subtotal: z.string().min(1, { message: "Subtotal is required" }),
   diskon: z.string(),
   ongkir: z.string(),

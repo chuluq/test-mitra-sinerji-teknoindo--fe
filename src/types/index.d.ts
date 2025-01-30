@@ -17,9 +17,8 @@ export type Sales = {
 };
 
 export type SalesDetails = {
+  sales_id?: string | undefined;
   barang_id: string;
-  barang_kode?: string;
-  barang_nama?: string;
   kode?: string;
   nama?: string;
   qty: string;
@@ -31,6 +30,7 @@ export type SalesDetails = {
 };
 
 export type PayloadTransaction = {
+  id?: number;
   kode: string;
   tgl: Date | string;
   cust_id: number;
@@ -46,6 +46,29 @@ export type PayloadTransaction = {
     diskon_nilai: number;
     harga_diskon: number;
     total: number;
+  }[];
+};
+
+export type Transaction = {
+  id: number;
+  kode: string;
+  cust_id: number;
+  tgl: Date | string;
+  subtotal: string;
+  diskon: string;
+  ongkir: string;
+  total_bayar: string;
+  no_transaksi: string;
+  customer: Customer;
+  sales_details: {
+    sales_id: number;
+    barang_id: number;
+    harga_bandrol: string;
+    qty: number;
+    diskon_pct: string;
+    diskon_nilai: string;
+    harga_diskon: string;
+    total: string;
   }[];
 };
 

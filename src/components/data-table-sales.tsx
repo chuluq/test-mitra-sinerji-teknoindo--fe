@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Trash2Icon } from "lucide-react";
+import Link from "next/link";
+import { Edit2Icon, Loader2, Trash2Icon } from "lucide-react";
 import { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
 
@@ -71,7 +72,12 @@ export const DataTableSales = ({ sales }: DataTableSalesProps) => {
         const salesId = row.original.id;
 
         return (
-          <div>
+          <div className="flex items-center space-x-2">
+            <Button variant="outline" disabled={isLoading} asChild>
+              <Link href={`/transaction/${row.original.id}`}>
+                <Edit2Icon />
+              </Link>
+            </Button>
             <Button
               variant="destructive"
               onClick={() => deleteSale(salesId)}

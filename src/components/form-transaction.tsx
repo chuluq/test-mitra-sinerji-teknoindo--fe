@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -19,7 +19,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Form,
@@ -48,16 +47,23 @@ import { useCustomers } from "@/hooks/use-customers";
 import { useToast } from "@/hooks/use-toast";
 import { calculateDiscountAmount, cn, formatPrice } from "@/lib/utils";
 import { formSchema, salesSchema } from "@/lib/validations";
-import { PayloadTransaction, SalesDetails } from "@/types";
+import { PayloadTransaction, SalesDetails, Transaction } from "@/types";
 import { API_URL } from "@/lib/config";
-import { revalidatePath } from "next/cache";
 
 type FormValues = z.infer<typeof formSchema>;
 type FormSalesDetails = z.infer<typeof salesSchema>;
 
 const columnHelper = createColumnHelper<SalesDetails>();
 
-export const FormTransaction = () => {
+interface FormTransactionProps {
+  transactionId?: number;
+  transaction?: Transaction;
+}
+
+export const FormTransaction = ({
+  transactionId,
+  transaction,
+}: FormTransactionProps) => {
   const router = useRouter();
   const { toast } = useToast();
   const {
@@ -102,8 +108,8 @@ export const FormTransaction = () => {
     resolver: zodResolver(salesSchema),
     defaultValues: {
       barang_id: "",
-      barang_kode: "",
-      barang_nama: "",
+      kode: "",
+      nama: "",
       harga_diskon: "0", // harga setelah diskon
       diskon_nilai: "0",
       diskon_pct: "0",
@@ -112,6 +118,32 @@ export const FormTransaction = () => {
       total: "0",
     },
   });
+
+  useEffect(() => {
+    if (transactionId && transaction) {
+      form.setValue("cust_id", transaction.cust_id.toString() ?? "");
+      form.setValue("cust_nama", transaction.customer.nama ?? "");
+      form.setValue("cust_telp", transaction.customer.telp ?? "");
+      form.setValue("diskon", transaction.diskon ?? "");
+      form.setValue("kode", transaction.kode ?? "");
+      form.setValue("ongkir", transaction.ongkir ?? "");
+      form.setValue("subtotal", transaction.subtotal ?? "");
+      form.setValue("total_bayar", transaction.total_bayar ?? "");
+      form.setValue("tgl", new Date(transaction.tgl) ?? "");
+      const salesDetails = transaction.sales_details.map((detail) => {
+        return {
+          ...detail,
+          barang_id: detail.barang_id.toString(),
+          sales_id: detail.sales_id.toString(),
+          qty: detail.qty.toString(),
+          kode: "",
+          nama: "",
+        };
+      });
+
+      form.setValue("sales_details", salesDetails ?? []);
+    }
+  }, [transactionId, transaction, form]);
 
   async function onSubmit(values: FormValues) {
     try {
@@ -136,14 +168,27 @@ export const FormTransaction = () => {
         total_bayar: Number(values.total_bayar),
         sales_details,
       };
-
-      const result = await fetch(`${API_URL}/sales`, {
-        method: "POST",
-        body: JSON.stringify(payload),
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
+      if (transactionId) {
+        payload.id = transactionId;
+      }
+      let result;
+      if (transactionId) {
+        result = await fetch(`${API_URL}/sales/${transactionId}`, {
+          method: "PUT",
+          body: JSON.stringify(payload),
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+      } else {
+        result = await fetch(`${API_URL}/sales`, {
+          method: "POST",
+          body: JSON.stringify(payload),
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+      }
 
       if (!result.ok) {
         toast({
@@ -153,7 +198,6 @@ export const FormTransaction = () => {
       }
 
       form.reset();
-      revalidate();
       router.push("/");
     } catch (error) {
       toast({
@@ -162,11 +206,6 @@ export const FormTransaction = () => {
         variant: "destructive",
       });
     }
-  }
-
-  function revalidate() {
-    "use server";
-    revalidatePath("/");
   }
 
   function updateCustomerField(kode: string) {
@@ -179,7 +218,7 @@ export const FormTransaction = () => {
   function updateBarangField(kode: string) {
     const itemBarang = barang?.data.find((barang) => barang.kode === kode);
     setValue("barang_id", itemBarang?.id.toString() ?? "");
-    setValue("barang_nama", itemBarang?.nama ?? "");
+    setValue("nama", itemBarang?.nama ?? "");
     setValue("harga_bandrol", itemBarang?.harga ?? "");
     const price = parseFloat(itemBarang?.harga ?? "");
     updateTotalPrice(price, parseInt(getValues("qty")));
@@ -256,11 +295,14 @@ export const FormTransaction = () => {
     {
       id: "actions",
       header: () => (
-        <DialogTrigger asChild>
-          <Button type="button">
-            <PlusIcon /> Tambah
-          </Button>
-        </DialogTrigger>
+        <Button
+          onClick={() => {
+            setIsEditSale(false);
+            setOpenDialog(!openDialog);
+          }}
+        >
+          <PlusIcon /> Tambah
+        </Button>
       ),
       cell: ({ row }) => {
         const rowSale = form.getValues("sales_details");
@@ -283,8 +325,8 @@ export const FormTransaction = () => {
             (sale) => sale.barang_id === row.original.barang_id
           );
           setValue("barang_id", selectedRowSale?.barang_id ?? "");
-          setValue("barang_kode", selectedRowSale?.barang_kode ?? "");
-          setValue("barang_nama", selectedRowSale?.barang_nama ?? "");
+          setValue("kode", selectedRowSale?.kode ?? "");
+          setValue("nama", selectedRowSale?.nama ?? "");
           setValue("diskon_nilai", selectedRowSale?.diskon_nilai ?? "");
           setValue("diskon_pct", selectedRowSale?.diskon_pct ?? "");
           setValue("harga_bandrol", selectedRowSale?.harga_bandrol ?? "");
@@ -318,11 +360,11 @@ export const FormTransaction = () => {
       },
     },
     {
-      accessorKey: "barang_kode",
+      accessorKey: "kode",
       header: "Kode Barang",
     },
     {
-      accessorKey: "barang_nama",
+      accessorKey: "nama",
       header: "Nama Barang",
     },
     {
@@ -361,13 +403,7 @@ export const FormTransaction = () => {
   if (isLoadingCustomers || isLoadingBarang) return <div>loading...</div>;
 
   return (
-    <Dialog
-      open={openDialog}
-      onOpenChange={() => {
-        setOpenDialog(!openDialog);
-        reset();
-      }}
-    >
+    <>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 my-8">
           <div className="w-full md:max-w-screen-sm space-y-6">
@@ -434,7 +470,13 @@ export const FormTransaction = () => {
                         field.onChange(kode);
                         updateCustomerField(kode);
                       }}
-                      defaultValue={field.value}
+                      value={
+                        customers?.data
+                          ? customers?.data.find(
+                              (cust) => cust.kode === field.value
+                            )?.kode
+                          : ""
+                      }
                     >
                       <FormControl>
                         <SelectTrigger>
@@ -558,140 +600,148 @@ export const FormTransaction = () => {
           </div>
         </form>
       </Form>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Add Barang</DialogTitle>
-        </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="barang_nama" className="text-right">
-              Nama Barang
-            </Label>
-            <Select
-              onValueChange={(kode) => {
-                setValue("barang_kode", kode);
-                updateBarangField(kode);
-              }}
-              value={watch("barang_kode")}
-            >
-              <SelectTrigger className="col-span-3">
-                <SelectValue placeholder="Select barang" />
-              </SelectTrigger>
-              <SelectContent>
-                {barang
-                  ? barang?.data.map((barang, index) => (
-                      <SelectItem key={index} value={barang.kode}>
-                        {barang.nama}
-                      </SelectItem>
-                    ))
-                  : null}
-              </SelectContent>
-            </Select>
-            {errors?.barang_id && (
-              <p className="ml-auto text-xs text-red-600 col-span-4">
-                {errors?.barang_id.message}
-              </p>
-            )}
+      <Dialog
+        open={openDialog}
+        onOpenChange={() => {
+          setOpenDialog(!openDialog);
+          reset();
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Barang</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="nama" className="text-right">
+                Nama Barang
+              </Label>
+              <Select
+                onValueChange={(kode) => {
+                  setValue("kode", kode);
+                  updateBarangField(kode);
+                }}
+                value={watch("kode")}
+              >
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Select barang" />
+                </SelectTrigger>
+                <SelectContent>
+                  {barang
+                    ? barang?.data.map((barang, index) => (
+                        <SelectItem key={index} value={barang.kode}>
+                          {barang.nama}
+                        </SelectItem>
+                      ))
+                    : null}
+                </SelectContent>
+              </Select>
+              {errors?.barang_id && (
+                <p className="ml-auto text-xs text-red-600 col-span-4">
+                  {errors?.barang_id.message}
+                </p>
+              )}
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="harga_bandrol" className="text-right">
+                Harga Bandrol
+              </Label>
+              <Input
+                type="text"
+                id="harga_bandrol"
+                className="col-span-3"
+                disabled
+                {...register("harga_bandrol")}
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="qty" className="text-right">
+                Quantity
+              </Label>
+              <Input
+                type="number"
+                id="qty"
+                min="1"
+                className="col-span-3"
+                value={watch("qty")}
+                onChange={(e) => {
+                  setValue("qty", e.target.value);
+                  updateTotalPrice(
+                    Number(getValues("harga_bandrol")),
+                    Number(e.target.value)
+                  );
+                  updatePriceAfterDiscount(
+                    Number(getValues("harga_bandrol")),
+                    Number(e.target.value),
+                    Number(getValues("diskon_pct"))
+                  );
+                }}
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="diskon_pct" className="text-right">
+                Diskon (%)
+              </Label>
+              <Input
+                type="number"
+                id="diskon_pct"
+                min="0"
+                className="col-span-3"
+                value={watch("diskon_pct")}
+                onChange={(e) => {
+                  setValue("diskon_pct", e.target.value);
+                  updatePriceAfterDiscount(
+                    Number(getValues("harga_bandrol")),
+                    Number(getValues("qty")),
+                    Number(e.target.value)
+                  );
+                }}
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="diskon_nilai" className="text-right">
+                Nilai Diskon
+              </Label>
+              <Input
+                type="text"
+                id="diskon_nilai"
+                className="col-span-3"
+                disabled
+                {...register("diskon_nilai")}
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="harga_diskon" className="text-right">
+                Harga Diskon
+              </Label>
+              <Input
+                type="text"
+                id="harga_diskon"
+                className="col-span-3"
+                disabled
+                {...register("harga_diskon")}
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="total" className="text-right">
+                Total
+              </Label>
+              <Input
+                type="text"
+                id="total"
+                className="col-span-3"
+                disabled
+                {...register("total")}
+              />
+            </div>
           </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="harga_bandrol" className="text-right">
-              Harga Bandrol
-            </Label>
-            <Input
-              type="text"
-              id="harga_bandrol"
-              className="col-span-3"
-              disabled
-              {...register("harga_bandrol")}
-            />
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="qty" className="text-right">
-              Quantity
-            </Label>
-            <Input
-              type="number"
-              id="qty"
-              min="1"
-              className="col-span-3"
-              value={watch("qty")}
-              onChange={(e) => {
-                setValue("qty", e.target.value);
-                updateTotalPrice(
-                  Number(getValues("harga_bandrol")),
-                  Number(e.target.value)
-                );
-                updatePriceAfterDiscount(
-                  Number(getValues("harga_bandrol")),
-                  Number(e.target.value),
-                  Number(getValues("diskon_pct"))
-                );
-              }}
-            />
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="diskon_pct" className="text-right">
-              Diskon (%)
-            </Label>
-            <Input
-              type="number"
-              id="diskon_pct"
-              min="0"
-              className="col-span-3"
-              value={watch("diskon_pct")}
-              onChange={(e) => {
-                setValue("diskon_pct", e.target.value);
-                updatePriceAfterDiscount(
-                  Number(getValues("harga_bandrol")),
-                  Number(getValues("qty")),
-                  Number(e.target.value)
-                );
-              }}
-            />
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="diskon_nilai" className="text-right">
-              Nilai Diskon
-            </Label>
-            <Input
-              type="text"
-              id="diskon_nilai"
-              className="col-span-3"
-              disabled
-              {...register("diskon_nilai")}
-            />
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="harga_diskon" className="text-right">
-              Harga Diskon
-            </Label>
-            <Input
-              type="text"
-              id="harga_diskon"
-              className="col-span-3"
-              disabled
-              {...register("harga_diskon")}
-            />
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="total" className="text-right">
-              Total
-            </Label>
-            <Input
-              type="text"
-              id="total"
-              className="col-span-3"
-              disabled
-              {...register("total")}
-            />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button onClick={handleSubmit(modifySalesDetails)}>
-            {isEditSale ? "Edit" : "Add"} Barang
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          <DialogFooter>
+            <Button onClick={handleSubmit(modifySalesDetails)}>
+              {isEditSale ? "Edit" : "Add"} Barang
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
