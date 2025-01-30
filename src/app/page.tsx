@@ -4,8 +4,8 @@ import Link from "next/link";
 import { DataTableSales } from "@/components/data-table-sales";
 import { SearchSales } from "@/components/search-sales";
 import { Button } from "@/components/ui/button";
-import { API_URL } from "@/lib/config";
 import { SalesTableSkeleton } from "@/components/skeletons";
+import { API_URL } from "@/lib/config";
 
 async function getSales(name?: string) {
   if (name) {

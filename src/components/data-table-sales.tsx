@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { Trash2Icon } from "lucide-react";
+import { Loader2, Trash2Icon } from "lucide-react";
 import { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
 
@@ -22,6 +21,8 @@ import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { useToast } from "@/hooks/use-toast";
 import { API_URL } from "@/lib/config";
+import { revalidateHome } from "@/app/actions";
+import { SalesTableSkeleton } from "./skeletons";
 
 interface DataTableSalesProps {
   sales: Sales[];
@@ -29,10 +30,10 @@ interface DataTableSalesProps {
 
 export const DataTableSales = ({ sales }: DataTableSalesProps) => {
   const { toast } = useToast();
-  const router = useRouter();
 
   const [isAlertDeleteOpen, setIsAlertDeleteOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<number>();
+  const [isLoading, setIsLoading] = useState(false);
 
   function deleteSale(salesId: number) {
     setSelectedId(salesId);
@@ -41,23 +42,24 @@ export const DataTableSales = ({ sales }: DataTableSalesProps) => {
 
   async function onDeleteSale() {
     try {
-      const result = await fetch(`${API_URL}/sales/${selectedId}`, {
+      setIsLoading(true);
+      await fetch(`${API_URL}/sales/${selectedId}`, {
         method: "DELETE",
       });
 
-      if (result.ok) {
-        router.refresh();
-        toast({
-          variant: "default",
-          title: "Deleted data successfully!",
-        });
-      }
+      await revalidateHome();
+      toast({
+        variant: "default",
+        title: "Deleted data successfully!",
+      });
     } catch (error) {
       toast({
         variant: "destructive",
         title: "Something went wrong!",
         description: JSON.stringify(error),
       });
+    } finally {
+      setIsLoading(false);
     }
   }
 
@@ -70,7 +72,11 @@ export const DataTableSales = ({ sales }: DataTableSalesProps) => {
 
         return (
           <div>
-            <Button variant="destructive" onClick={() => deleteSale(salesId)}>
+            <Button
+              variant="destructive"
+              onClick={() => deleteSale(salesId)}
+              disabled={isLoading}
+            >
               <Trash2Icon />
             </Button>
           </div>
@@ -143,8 +149,12 @@ export const DataTableSales = ({ sales }: DataTableSalesProps) => {
   ];
 
   return (
-    <div>
-      <DataTable columns={columns} data={sales ?? []} />
+    <>
+      {isLoading ? (
+        <SalesTableSkeleton />
+      ) : (
+        <DataTable columns={columns} data={sales ?? []} />
+      )}
       <AlertDialog
         open={isAlertDeleteOpen}
         onOpenChange={() => setIsAlertDeleteOpen(!isAlertDeleteOpen)}
@@ -160,14 +170,15 @@ export const DataTableSales = ({ sales }: DataTableSalesProps) => {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-destructive"
+              type="button"
               onClick={onDeleteSale}
+              disabled={isLoading}
             >
-              Delete
+              {isLoading && <Loader2 className="animate-spin" />} Delete
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </>
   );
 };

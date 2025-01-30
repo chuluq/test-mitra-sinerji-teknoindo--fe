@@ -50,6 +50,7 @@ import { calculateDiscountAmount, cn, formatPrice } from "@/lib/utils";
 import { formSchema, salesSchema } from "@/lib/validations";
 import { PayloadTransaction, SalesDetails } from "@/types";
 import { API_URL } from "@/lib/config";
+import { revalidatePath } from "next/cache";
 
 type FormValues = z.infer<typeof formSchema>;
 type FormSalesDetails = z.infer<typeof salesSchema>;
@@ -152,6 +153,7 @@ export const FormTransaction = () => {
       }
 
       form.reset();
+      revalidate();
       router.push("/");
     } catch (error) {
       toast({
@@ -160,6 +162,11 @@ export const FormTransaction = () => {
         variant: "destructive",
       });
     }
+  }
+
+  function revalidate() {
+    "use server";
+    revalidatePath("/");
   }
 
   function updateCustomerField(kode: string) {
