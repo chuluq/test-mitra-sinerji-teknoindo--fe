@@ -133,11 +133,11 @@ export const FormTransaction = ({
       const salesDetails = transaction.sales_details.map((detail) => {
         return {
           ...detail,
-          barang_id: detail.barang_id.toString(),
-          sales_id: detail.sales_id.toString(),
-          qty: detail.qty.toString(),
-          kode: "",
-          nama: "",
+          barang_id: detail.barang_id.toString() ?? "",
+          sales_id: detail.sales_id.toString() ?? "",
+          qty: detail.qty.toString() ?? "",
+          kode: detail.barang.kode ?? "",
+          nama: detail.barang.nama ?? "",
         };
       });
 

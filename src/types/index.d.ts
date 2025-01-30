@@ -69,6 +69,7 @@ export type Transaction = {
     diskon_nilai: string;
     harga_diskon: string;
     total: string;
+    barang: Barang;
   }[];
 };
 
